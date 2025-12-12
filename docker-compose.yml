@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: org_management_mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: master_db
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: org_management_api
+    ports:
+      - "8000:8000"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      MASTER_DB_NAME: master_db
+      MASTER_COLLECTION_NAME: organizations
+      ADMIN_COLLECTION_NAME: admin_users
+      JWT_SECRET_KEY: your-super-secret-key-change-this-in-production
+      DEBUG: "False"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  mongodb_data:
+    driver: local
