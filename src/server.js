@@ -54,6 +54,35 @@ app.use((req, res) => {
   });
 });
 
+let dbInitialized = false;
+
+// Initialize DB on first request
+app.use(async (req, res, next) => {
+  if (!dbInitialized && config.mongoUrl) {
+    try {
+      const dbManager = DatabaseManager.getInstance();
+      await dbManager.connect();
+
+      const db = dbManager.getDb();
+      const orgsCollection = db.collection(config.masterCollection);
+      await orgsCollection.createIndex({ organization_name: 1 }, { unique: true });
+
+      const adminCollection = db.collection(config.adminCollection);
+      await adminCollection.createIndex({ admin_email: 1 }, { unique: true });
+
+      dbInitialized = true;
+      logger.info('Database connected');
+    } catch (error) {
+      logger.error('Database connection failed', { message: error.message });
+      return res.status(500).json({
+        error: { code: 'DB_CONNECTION_ERROR', message: 'Database connection failed' },
+      });
+    }
+  }
+  next();
+});
+
+// Local development: start server
 async function startServer() {
   try {
     const dbManager = DatabaseManager.getInstance();
@@ -85,6 +114,9 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-startServer();
+// Only start server in development (not in Vercel)
+if (process.env.NODE_ENV !== 'production') {
+  startServer();
+}
 
 export default app;
